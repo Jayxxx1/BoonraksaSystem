@@ -1,0 +1,48 @@
+# --- Dependencies (ไม่ต้องอัปโหลดตัว Library ขึ้นไป) ---
+node_modules/
+package-lock.json    # (ปกติเก็บไว้ แต่ถ้าอยากให้ Clean หรือมีปัญหา Version ก็ ignore ได้ แต่แนะนำให้เก็บครับ)
+yarn.lock
+
+# --- Production Build (ไม่ต้องอัปโหลดไฟล์ที่ Build แล้ว) ---
+dist/
+build/
+
+# --- Environment Variables (ความลับสุดยอด ห้ามหลุดเด็ดขาด!) ---
+.env
+.env.local
+.env.*.local
+.env.development
+.env.test
+.env.production
+
+# --- Logs (ไฟล์ขยะจากการรัน) ---
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# --- IDE & OS (ไฟล์ขยะของเครื่องเรา) ---
+.DS_Store
+.vscode/
+.idea/
+*.suo
+*.ntvs
+*.njsproj
+*.sln
+*.sw?
+Thumbs.db
+
+# --- Testing ---
+coverage/
+
+# --- Prisma (Database) ---
+# อย่า ignore folder 'migrations' นะครับ ต้องเอาขึ้นไป
+# แต่ถ้ามีไฟล์ .sqlite หรือ database file ให้ ignore (งานนี้เราใช้ Postgres ไม่น่ามีไฟล์พวกนี้)
+*.sqlite
+*.sqlite-journal
+
+# --- Optional: Ignore โฟลเดอร์รูปภาพถ้าเก็บในเครื่อง (แต่เราใช้ Cloud S3 เลยไม่น่ามี) ---
+# server/uploads/
