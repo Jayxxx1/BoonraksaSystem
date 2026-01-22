@@ -1,0 +1,198 @@
+// 1. Config เชื่อมต่อ Database (Postgres)
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// --------------------------------------------------------
+// 👥 ส่วนจัดการผู้ใช้งาน (User Management)
+// --------------------------------------------------------
+
+enum Role {
+  ADMIN // ผู้ดูแลระบบ
+  EXECUTIVE // ผู้บริหาร
+  SALES // ฝ่ายขาย
+  GRAPHIC // ✨ ฝ่ายกราฟิก (เพิ่มใหม่)
+  STOCK // ฝ่ายสต็อก/คลังสินค้า
+  PRODUCTION // ฝ่ายผลิต (ปัก/สกรีน)
+  SEWING_QC // ✨ ฝ่ายตัดเย็บและ QC (รวมกันตามสั่ง)
+  DELIVERY // ฝ่ายจัดส่ง
+}
+
+model User {
+  id       Int     @id @default(autoincrement())
+  username String  @unique
+  password String
+  name     String
+  role     Role    @default(SALES)
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation: เชื่อมว่า User คนนี้รับผิดชอบงานไหนบ้าง
+  openedOrders  Order[] @relation("SalesOrders")
+  graphicOrders Order[] @relation("GraphicOrders") // งานที่กราฟิกคนนี้ทำ
+  qcOrders      Order[] @relation("QCOrders") // งานที่ QC คนนี้ตรวจ
+
+  activityLogs ActivityLog[]
+  pushSubs     PushSubscription[]
+}
+
+// --------------------------------------------------------
+// 📦 ส่วนออเดอร์และใบงาน (Order & Job Sheet)
+// --------------------------------------------------------
+
+enum OrderStatus {
+  PENDING // รอชำระเงิน/มัดจำ
+  CONFIRMED // ยืนยันแล้ว (ตัดสต็อกแล้ว)
+  DESIGNING // กำลังทำแบบ
+  PRODUCTION // กำลังผลิต (ตัด/เย็บ/สกรีน)
+  PACKING // แพ็คสินค้า
+  DELIVERY // จัดส่งแล้ว
+  COMPLETED // จบงาน
+  CANCELLED // ยกเลิก (คืนสต็อก)
+}
+
+model Order {
+  id    Int    @id @default(autoincrement())
+  jobId String @unique // รหัสใบงานที่โชว์ลูกค้า เช่น "JOB-6701-001"
+
+  // ข้อมูลลูกค้า (Customer Info)
+  customerName    String
+  customerPhone   String?
+  customerAddress String? // เอาไว้ส่งของ
+
+  // ข้อมูลเงิน
+  totalPrice Decimal @db.Decimal(10, 2) // ยอดรวม
+  deposit    Decimal @default(0) @db.Decimal(10, 2) // มัดจำ
+
+  // สถานะและวันที่
+  status  OrderStatus @default(PENDING)
+  dueDate DateTime? // กำหนดส่งงาน
+
+  // ใครเป็นคนขาย
+  salesId Int // เซลล์คนเปิดบิล
+  sales   User @relation("SalesOrders", fields: [salesId], references: [id])
+
+  graphicId Int? // ✨ กราฟิกคนไหนทำแบบ?
+  graphic   User? @relation("GraphicOrders", fields: [graphicId], references: [id])
+
+  qcId Int? // ✨ QC คนไหนตรวจผ่าน?
+  qc   User? @relation("QCOrders", fields: [qcId], references: [id])
+
+  // Relations
+  items OrderItem[]
+  logs  ActivityLog[] // ประวัติการทำงานของออเดอร์นี้
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Category {
+  id       Int       @id @default(autoincrement())
+  name     String // เช่น "เสื้อช็อป", "โปโล", "รองเท้า"
+  products Product[]
+}
+
+model Product {
+  id          Int     @id @default(autoincrement())
+  name        String // ชื่อสินค้า (เช่น "เสื้อช็อปแขนยาว A")
+  codePrefix  String? // รหัสรุ่น (เช่น "A", "P")
+  description String?
+  imageUrl    String? // รูปตัวอย่างสินค้า (1 รูปตามที่ตกลง)
+
+  categoryId Int
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  variants ProductVariant[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum Gender {
+  male
+  female
+}
+
+model ProductVariant {
+  id  Int    @id @default(autoincrement())
+  sku String @unique // รหัสเฉพาะห้ามซ้ำ (เช่น "A101-M")
+
+  // สเปคสินค้า (รองรับทุกประเภทใน CSV)
+  code   String // รหัสแบบ/สี (เช่น "A101")
+  color  String // สี (เช่น "กรมท่า")
+  size   String // ไซส์ (ใส่ได้หมดทั้ง "M", "40", "Free Size")
+  gender Gender @default(male)
+
+  // ข้อมูลเงินและสต็อก
+  price Decimal @db.Decimal(10, 2) // ราคาขาย
+  cost  Decimal @default(0) @db.Decimal(10, 2) // ต้นทุน (เผื่อดูเขียว/แดง)
+
+  stock    Int     @default(0) // จำนวนที่มีอยู่จริง
+  minStock Int     @default(5) // ✨ จุดเตือนสั่งซื้อ (Low Stock Alert)
+  location String? // ✨ ตำแหน่งเก็บของ (เช่น "ชั้น 2 ล็อก A")
+
+  productId Int
+  product   Product @relation(fields: [productId], references: [id])
+
+  orderItems OrderItem[]
+}
+
+// รายการสินค้าในออเดอร์ (เสื้อแต่ละแบบ)
+model OrderItem {
+  id      Int   @id @default(autoincrement())
+  orderId Int
+  order   Order @relation(fields: [orderId], references: [id])
+
+  // -------------------------------------------------------
+  // ✅ จุดที่ต้องเพิ่ม: เชื่อมกับของจริงในโกดัง (เพื่อตัดสต็อก)
+  // -------------------------------------------------------
+  variantId Int
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+
+  // -------------------------------------------------------
+  // ข้อมูล Snapshot (บันทึกไว้เป็นหลักฐาน ณ วันที่ซื้อ)
+  // -------------------------------------------------------
+  productName String // ชื่อสินค้าตอนซื้อ (เผื่ออนาคตเปลี่ยนชื่อ)
+  price       Decimal @db.Decimal(10, 2) // ราคาตอนซื้อ (เผื่ออนาคตขึ้นราคา)
+  quantity    Int // จำนวนที่ซื้อ
+
+  // ข้อมูลพิเศษ (JSON) เช่น ตำแหน่งสกรีน, ชื่อไฟล์ Artwork
+  details Json?
+}
+
+// --------------------------------------------------------
+// 📊 ส่วนติดตามงานและแจ้งเตือน (Tracking & Notification)
+// --------------------------------------------------------
+
+// ตารางเก็บว่า "ใคร ทำอะไร เมื่อไหร่" (Audit Trail)
+model ActivityLog {
+  id      Int     @id @default(autoincrement())
+  action  String // เช่น "ตัดสต็อก", "เปลี่ยนสถานะเป็นผลิต", "แก้บิล"
+  details String? // รายละเอียดเพิ่มเติม
+
+  orderId Int?
+  order   Order? @relation(fields: [orderId], references: [id])
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+
+  timestamp DateTime @default(now())
+}
+
+// ตารางเก็บ Token สำหรับยิงแจ้งเตือนเข้ามือถือ (Web Push)
+model PushSubscription {
+  id       Int    @id @default(autoincrement())
+  endpoint String // URL ของ Google/Apple Push Service
+  keys     Json // กุญแจเข้ารหัส (p256dh, auth)
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+}
